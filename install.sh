@@ -4,17 +4,18 @@
 #
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "This installer must not be run as root as it will make changes to file ownership and install files as necessary on your system." >&2
+	_error "This installer must be run as root as it will make changes to file ownership and install files as necessary on your system." >&2
 	exit 1
 fi
 if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
-	echo "This script must not be sourced" >&2
-	return 1
+	_error "This script must not be sourced"
+	exit 1
 fi
 if [ -n "${SUDO_USER}" ]; then
 	USER_NAME=${SUDO_USER}
 else
-	USER_NAME=${USER_NAME:-$(whoami)}
+	__error "SUDO_USER internal environment variable not set automatically by sudo, please call the script using SUDO_USER=youruser sudo ./install.sh"
+	exit 1
 fi
 
 CSCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
