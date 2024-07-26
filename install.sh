@@ -4,25 +4,24 @@
 #
 
 if [ "$(id -u)" -ne 0 ]; then
-	_error "This installer must be run as root as it will make changes to file ownership and install files as necessary on your system." >&2
+	echo "This installer must be run as root as it will make changes to file ownership and install files as necessary on your system." >&2
 	exit 1
 fi
 if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
-	_error "This script must not be sourced"
+	echo "This script must not be sourced" >&2
 	exit 1
 fi
 if [ -n "${SUDO_USER}" ]; then
-	USER_NAME=${SUDO_USER}
+	USER_NAME=${SUDO_USER:-${USER}}
 else
-	__error "SUDO_USER internal environment variable not set automatically by sudo, please call the script using SUDO_USER=youruser sudo ./install.sh"
-	exit 1
+	USER_NAME=$(logname 2>/dev/null || echo ${SUDO_USER:-${USER}})
 fi
 
 CSCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 CONFIG_FILE=${CONFIG_FILE:-"manifest.json"}
 INSTALL_PREFIX=${INSTALL_PREFIX:-"/usr"}
 USER_MODE=${USER_MODE:-0}
-DEBUG=${DEBUG:-0}
+DEBUG=${DEBUG:-1}
 LOGGING=${LOGGING:-1}
 LOG_FILE=${LOG_FILE:-"/var/log/grass-install.log"}
 
@@ -44,41 +43,62 @@ C_UNDERLINE=$(tput smul)
 function __strip_ansi() {
 	sed -r "s/\x1B\[[0-9;]*[JKmsu]//g" <<<"$1"
 }
-function __info() {
-	local _logstr _logstr_noansi
-	_logstr="${C_CYAN}[${C_BOLD}INFO${C_RESET}${C_CYAN}] $1${C_RESET}"
+function __log() {
+	local _logstr _logstr_noansi _loglevel
+	_loglevel=$1
+	if [ -z "${_loglevel}" ]; then
+		_loglevel="INFO"
+	fi
+	shift 1
+	_logstr="$1"
 	_logstr_noansi=$(__strip_ansi "${_logstr}")
-	echo -e "${_logstr}" >&2
+	case "${_loglevel}" in
+		"INFO")
+			_logstr="${C_CYAN}[${C_BOLD}INFO   ${C_RESET}${C_CYAN}] ${_logstr}${C_RESET}"
+			;;
+		"WARN")
+			_logstr="${C_YELLOW}[${C_BOLD}WARN   ${C_RESET}${C_YELLOW}] ${_logstr}${C_RESET}"
+			;;
+		"ERROR")
+			_logstr="${C_RED}[${C_BOLD}ERROR ${C_RESET}${C_RED}] ${_logstr}${C_RESET}"
+			;;
+		"SUCCESS")
+			_logstr="${C_GREEN}[${C_BOLD}SUCCESS${C_RESET}${C_GREEN}] ${_logstr}${C_RESET}"
+			;;
+		"DEBUG")
+			_logstr="${C_MAGENTA}[${C_BOLD}DEBUG  ${C_RESET}${C_MAGENTA}] ${_logstr}${C_RESET}"
+			;;
+		*)
+			_logstr="${C_CYAN}[${C_BOLD}INFO   ${C_RESET}${C_CYAN}] ${_logstr}${C_RESET}"
+			;;
+	esac
+	if [ ${DEBUG} -eq 1 ] && [ "${_loglevel}" == "DEBUG" ]; then
+		echo -e "${_logstr}" >&2
+	elif [ "${_loglevel}" != "DEBUG" ]; then
+		if [ "${_loglevel}" == "ERROR" ]; then
+			echo -e "${_logstr}" >&2
+		else
+			echo -e "${_logstr}"
+		fi
+	fi
 	if [ ${LOGGING} -eq 1 ]; then
 		echo -e "$(date -I) ${_logstr_noansi}" >>"${LOG_FILE}"
 	fi
+}
+function __info() {
+	__log "INFO" "$1"
 }
 function __warn() {
-	local _logstr _logstr_noansi
-	_logstr="${C_YELLOW}[${C_BOLD}WARN${C_RESET}${C_YELLOW}] $1${C_RESET}"
-	_logstr_noansi=$(__strip_ansi "${_logstr}")
-	echo -e "${_logstr}" >&2
-	if [ ${LOGGING} -eq 1 ]; then
-		echo -e "$(date -I) ${_logstr_noansi}" >>"${LOG_FILE}"
-	fi
+	__log "WARN" "$1"
 }
 function __error() {
-	local _logstr _logstr_noansi
-	_logstr="${C_RED}[${C_BOLD}ERROR${C_RESET}${C_RED}] $1${C_RESET}"
-	_logstr_noansi=$(__strip_ansi "${_logstr}")
-	echo -e "${_logstr}" >&2
-	if [ ${LOGGING} -eq 1 ]; then
-		echo -e "$(date -I) ${_logstr_noansi}" >>"${LOG_FILE}"
-	fi
+	__log "ERROR" "$1"
 }
 function __success() {
-	local _logstr _logstr_noansi
-	_logstr="${C_GREEN}[${C_BOLD}SUCCESS${C_RESET}${C_GREEN}] $1${C_RESET}"
-	_logstr_noansi=$(__strip_ansi "${_logstr}")
-	echo -e "${_logstr}" >&2
-	if [ ${LOGGING} -eq 1 ]; then
-		echo -e "$(date -I) ${_logstr_noansi}" >>"${LOG_FILE}"
-	fi
+	__log "SUCCESS" "$1"
+}
+function __debug() {
+	__log "DEBUG" "$1"
 }
 function _exit_trap() {
 	local _exit_code=$?
@@ -173,6 +193,39 @@ function __check_command() {
 	return 0
 }
 
+function __run_command() {
+	local _command=$1
+	if [ -z "${_command}" ]; then
+		__error "Command not provided"
+		return 1
+	fi
+	shift 1
+	declare -a _args=($*)
+	__debug "Running command: ${_command} ${_args[*]}"
+	LASTEXITCODE=0
+	local _std=$(mktemp /tmp/std.XXXXXX)
+	eval "${_command} ${_args[*]}" &> "${_std}" || {
+		LASTEXITCODE=$?
+		declare -a _std_out=()
+		IFS=$'\n' mapfile -t _std_out < "${_std}"
+		for _line in "${_std_out[@]}"; do
+			_logstr=$(__strip_ansi "${_line}")
+			__error "${_logstr}"
+		done
+		__debug "Command: ${_command} ${_args[*]} failed with exit code: ${LASTEXITCODE}"
+		rm -f "${_std}" &>/dev/null
+		return $?
+	}
+	declare -a _std_out=()
+	IFS=$'\n' mapfile -t _std_out < "${_std}"
+	for _line in "${_std_out[@]}"; do
+		__debug "${_line}"
+	done
+	__debug "Command: ${_command} ${_args[*]} completed successfully"
+	rm -f "${_std}" &>/dev/null
+	return 0
+}
+
 function __check_file() {
 	local _file_path=$1
 	if [ -z "${_file_path}" ]; then
@@ -190,7 +243,7 @@ function __check_file() {
 	local _md5_checksum=$1
 	if [ -n "${_md5_checksum}" ]; then
 		if ! __check_command md5sum; then
-			__error "md5sum utility not found, could not verify checksum of file"
+			__error "md5sum utility not found, could not verify checksum of file, please install the coreutils package."
 			return 1
 		fi
 		if [ "$(md5sum ${_file_path} | awk '{print $1}')" != "${_md5_checksum}" ]; then
@@ -205,7 +258,7 @@ function __check_file() {
 	local _sha256_checksum=$1
 	if [ -n "${_sha256_checksum}" ]; then
 		if ! __check_command sha256sum; then
-			__error "sha256sum utility not found, could not verify checksum of file"
+			__error "sha256sum utility not found, could not verify checksum of file.  Please install the coreutils package."
 			return 1
 		fi
 		if [ "$(sha256sum ${_file_path} | awk '{print $1}')" != "${_sha256_checksum}" ]; then
@@ -259,19 +312,19 @@ function __extract_deb_package() {
 		return 1
 	fi
 	pushd "${_target_dir}" &>/dev/null || return 1
-	ar x "${_deb_file}" || {
+	__run_command ar x "${_deb_file}" || {
 		__error "Failed to extract ${_deb_file} package"
 		return 1
 	}
-	tar -xf control.tar.* || {
+	__run_command tar -xf control.tar.* || {
 		__error "Failed to extract control.tar.*"
 		return 1
 	}
-	tar -xf data.tar.* || {
+	__run_command tar -xf data.tar.* || {
 		__error "Failed to extract data.tar.*"
 		return 1
 	}
-	rm control.tar.* data.tar.* || {
+	__run_command rm control.tar.* data.tar.* || {
 		__error "Failed to remove control.tar.* data.tar.*"
 		return 1
 	}
@@ -319,42 +372,56 @@ function __install_files() {
     done
     find "${_base_folder}/usr" -type f | while read -r file; do
         dest_file="${_destination_folder}${file#${_base_folder}/usr}"
-        cp "${file}" "${dest_file}" || {
+        __run_command cp ${file} ${dest_file} || {
             __error "Failed to copy ${file} to ${dest_file}"
             return 1
         }
         if [ $_usermode -eq 1 ]; then
-            chown $(whoami):$(whoami) "${dest_file}" || {
+            __run_command chown $(whoami):$(whoami) "${dest_file}" || {
                 __error "Failed to change ownership of ${dest_file}"
                 return 1
             }
         fi
-		chmod 0755 "${dest_file}" || {
+		__run_command chmod 0755 "${dest_file}" || {
 			__error "Failed to change permissions of ${dest_file}"
 			return 1
 		}
     done
-    echo "Files copied to ${_destination_folder}"
-	if ! __check_command $(which pdate-desktop-database); then
+    __success "Files copied to ${_destination_folder} successfully"
+	return 0
+}
+
+function __update_desktop_database() {
+	if ! __check_command $(which update-desktop-database); then
 		__warning -e "update-desktop-database utility not found, please update your xdg-utils package and run:\n\nupdate-desktop-database ~/.local/share/applications if you'd like grass to be in your session menu."
 	else
-		# run the command as the user
 		$(which su) -s $(which bash) $USER_NAME -c "update-desktop-database /home/${USER_NAME}/.local/share/applications" || {
 			__error "Failed to update desktop database"
 			return 1
 		}
 	fi
-    __info "Fetching dependencies..."
-    if [ -f "${_base_folder}/control" ]; then
-        local _control_file
-		_control_file=$(cat "${_base_folder}/control")
-        declare -a _depends_array=($(echo "$_control_file" | sed -n 's/^Depends: //p' | tr ', ' '\n' | tr '\n' ' '))
-        __info -e "The following dependencies are required:\n"
-        for _dep in "${_depends_array[@]}"; do
-            __info " - ${_dep}"
-        done
-        __info "Please install the dependencies manually using your system's package manager"
-    fi
+	__success "Desktop database updated successfully"
+	return 0
+}
+
+function __display_dependencies() {
+	local _base_folder=$1
+	if [ -z "${_base_folder}" ]; then
+		__error "Base folder not provided"
+		return 1
+	fi
+	if [ ! -d "${_base_folder}" ]; then
+		__error "Base folder not found: ${_base_folder}"
+		return 1
+	fi
+	local _control_file
+	_control_file=$(cat "${_base_folder}/control")
+	declare -a _depends_array=($(echo "$_control_file" | sed -n 's/^Depends: //p' | tr ', ' '\n' | tr '\n' ' '))
+	__info "The following dependencies are required:"
+	for _dep in "${_depends_array[@]}"; do
+		__info " - ${_dep}"
+	done
+	__info "Please install the dependencies manually using your system's package manager"
 }
 
 function __install_cert() {
@@ -371,15 +438,15 @@ function __install_cert() {
 		__error "update-ca-certificates command not found"
 		return 1
 	fi
-	cp "${_cert_file}" /etc/ssl/certs/ || {
+	__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
 		__error "Failed to copy certificate file to /etc/ssl/certs/"
 		return 1
 	}
-	c_rehash /etc/ssl/certs/ || {
+	__run_command c_rehash /etc/ssl/certs/ || {
 		__error "Failed to update certificate hash"
 		return 1
 	}
-	$(which update-ca-certificates) || {
+	__run_command update-ca-certificates || {
 		__error "Failed to update certificate store"
 		return 1
 	}
@@ -462,6 +529,15 @@ function __process_node() {
 				_cert_file="${CSCRIPT_DIR}/.grass-install/${_file_name}"
 				__info "Installing certificate: ${_cert_file}..."
 				__install_cert "${_cert_file}" || return 1
+				;;
+			"update_desktop_database")
+				__info "Updating desktop database..."
+				__update_desktop_database || return 1
+				;;
+			"display_dependencies")
+				local _source_dir
+				_source_dir="${CSCRIPT_DIR}/.grass-install//${_file_name%.*}"
+				__display_dependencies "${_source_dir}" || return 1
 				;;
 			*)
 				echo "Invalid action: ${_action}" >&2

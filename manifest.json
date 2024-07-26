@@ -4,7 +4,7 @@
         "md5": "b4e35e48235059a8d1ddf72666dbacbd",
         "sha256": "6dcfa7b73e4ae5f3552494f8589bfabb68d11cbf29862797ab8f303800056ca6",
         "crc32": "91be8426",
-        "actions": [ "download_gdrive", "check", "extract_deb", "install_deb_folder" ]
+        "actions": [ "download_gdrive", "check", "extract_deb", "install_deb_folder", "update_desktop_database", "display_dependencies" ]
     },
     "SectigoRSADomainValidationSecureServerCA.crt": {
         "file_identifier": "1WJ6yxFBlVnbh28PX0y9C6pb_BEv7_QAD",
