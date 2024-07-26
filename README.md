@@ -15,7 +15,7 @@ The following Linux flavors where tested with the installer present in this repo
 | Ubuntu | 22.04 | **OK** | Choose xfce or lxde variants. |
 | Ubuntu | 24.04 | **OK** | Choose xfce or lxde variants. |
 | Debian | Bookworm | **TESTING** | Some package locations and names differ. |
-| Ziron Linux | 22.04 | **TESTING** | Choose xfce or lxdw Window Manager |
+| Ziron Linux | 22.04 | **TESTING** | Choose xfce or lxde Window Manager |
 | Arch Linux | 2024.06.01 | **TESITNG** | Worked well after CA patch, doesn't work in Plasma.
 
 **...more soon! Want your distro or to confirm that things work?**
