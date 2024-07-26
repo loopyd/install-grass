@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # install-grass: Install Grass on Any Linux!
 #
@@ -334,25 +334,25 @@ function __install_files() {
 		}
     done
     echo "Files copied to ${_destination_folder}"
-	if ! __check_command update-desktop-database; then
+	if ! __check_command $(which pdate-desktop-database); then
 		__warning -e "update-desktop-database utility not found, please update your xdg-utils package and run:\n\nupdate-desktop-database ~/.local/share/applications if you'd like grass to be in your session menu."
 	else
 		# run the command as the user
-		/bin/su -c "update-desktop-database ~/.local/share/applications" -s /bin/bash $USER_NAME || {
-			echo "Failed to update desktop database"
+		$(which su) -s $(which bash) $USER_NAME -c "update-desktop-database /home/${USER_NAME}/.local/share/applications" || {
+			__error "Failed to update desktop database"
 			return 1
 		}
 	fi
-    echo "Fetching dependencies..."
+    __info "Fetching dependencies..."
     if [ -f "${_base_folder}/control" ]; then
         local _control_file
 		_control_file=$(cat "${_base_folder}/control")
         declare -a _depends_array=($(echo "$_control_file" | sed -n 's/^Depends: //p' | tr ', ' '\n' | tr '\n' ' '))
-        echo -e "The following dependencies are required:\n"
+        __info -e "The following dependencies are required:\n"
         for _dep in "${_depends_array[@]}"; do
-            echo " - ${_dep}"
+            __info " - ${_dep}"
         done
-        echo -e "\nPlease install the dependencies manually using your system's package manager"
+        __info "Please install the dependencies manually using your system's package manager"
     fi
 }
 
@@ -366,7 +366,7 @@ function __install_cert() {
 		__error "Certificate file not found: ${_cert_file}"
 		return 1
 	fi
-	if ! __check_command update-ca-certificates; then
+	if ! __check_command $(which update-ca-certificates); then
 		__error "update-ca-certificates command not found"
 		return 1
 	fi
@@ -378,7 +378,7 @@ function __install_cert() {
 		__error "Failed to update certificate hash"
 		return 1
 	}
-	update-ca-certificates || {
+	$(which update-ca-certificates) || {
 		__error "Failed to update certificate store"
 		return 1
 	}
