@@ -1,2 +1,3 @@
 *.deb
-grass-node/
+*.crt
+.grass-install/
