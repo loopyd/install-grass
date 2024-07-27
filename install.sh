@@ -460,44 +460,39 @@ function __process_node() {
 		return 1
 	fi
 	shift 1
-	if [ $# -eq 0 ]; then
-		__error "Manifest file not provided"
-		return 1
-	fi
-	local _config_file=$1
-	if [ -z "${_config_file}" ]; then
-		__error "Manifest file not provided"
-		return 1
-	fi
-	if [ ! -f "${_config_file}" ]; then
-		__error "Manifest file not found: ${_config_file}"
+	local _config_json=$1
+	if [ -z "${_config_json}" ]; then
+		__error "Manifest JSON not provided"
 		return 1
 	fi
 	local _file_info _file_id _md5 _sha256 _crc32 _output_file _download_dir
 	declare -a _actions
-	_file_info=$(jq -r --arg file_name "$_file_name" '.[$file_name]' "${_config_file}")
-	_file_identifier=$(echo "${_file_info}" | jq -r '.file_identifier')
+	echo "${_config_json}" | jq '.' &>/dev/null || {
+		__error "Invalid JSON provided for file: ${_file_name}"
+		return 1
+	}
+	_file_identifier=$(echo "${_config_json}" | jq -r '.file_identifier')
 	if [ -z "${_file_identifier}" ]; then
 		__error "File identifier not found in manifest"
 		return 1
 	fi
-	_md5=$(echo "${_file_info}" | jq -r '.md5')
+	_md5=$(echo "${_config_json}" | jq -r '.md5')
 	if [ -z "${_md5}" ]; then
 		__error "MD5 checksum not found in manifest for file: ${_file_name}"
 		return 1
 	fi
-	_sha256=$(echo "${_file_info}" | jq -r '.sha256')
+	_sha256=$(echo "${_config_json}" | jq -r '.sha256')
 	if [ -z "${_sha256}" ]; then
 		__error "SHA256 checksum not found in manifest for file: ${_file_name}"
 		return 1
 	fi
-	_crc32=$(echo "${_file_info}" | jq -r '.crc32')
+	_crc32=$(echo "${_config_json}" | jq -r '.crc32')
 	if [ -z "${_crc32}" ]; then
 		__error "CRC32 checksum not found in manifest for file: ${_file_name}"
 		return 1
 	fi
 	_output_file="${CSCRIPT_DIR}/.grass-install/${_file_name}"
-	IFS=' ' mapfile -t _actions <<<$(echo "${_file_info}" | jq -r '.actions[]')
+	IFS=' ' mapfile -t _actions <<<$(echo "${_config_json}" | jq -r '.actions[]')
 	if [ ${#_actions[@]} -eq 0 ]; then
 		__error "No installation actions found in manifest for file: ${_file_name}"
 		return 1
@@ -557,8 +552,9 @@ function __process_manifest() {
 		echo "Manifest file not found: ${_manifest_file}" >&2
 		return 1
 	fi
-	for file_name in $(jq -r 'keys[]' "${_manifest_file}"); do
-		__process_node "${file_name}" "${_manifest_file}" || exit $?
+	for file_name in $(jq -r '.install | keys[]' "${_manifest_file}"); do
+		_manifest_install_json=$(jq -r --arg file_name "${file_name}" '.install[$file_name]' "${_manifest_file}")
+		__process_node "${file_name}" "${_manifest_install_json}" || exit $?
 	done
 }
 
