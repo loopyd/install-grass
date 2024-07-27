@@ -8,13 +8,13 @@ The contents of that file should match the values in this security declarence.
 
 If they do not, please notify the maintainers, **immediately**, and refrain from using this installer.
 
-Checksums for:  ``grass_4.26.0_amd64.deb``:
+Checksums for:  ``grass_4.26.3_amd64.deb``:
 
 | Type | Checksum |
 | ---- | -------- |
-| **md5** | ``b4e35e48235059a8d1ddf72666dbacbd`` |
-| **sha256** | ``6dcfa7b73e4ae5f3552494f8589bfabb68d11cbf29862797ab8f303800056ca6`` |
-| **crc32** | ``91be8426`` |
+| **md5** | ``9a7bf532e24a7fc55537d879312f45d5`` |
+| **sha256** | ``66dbabbe962b4cf56b8866c5a002328d25bd652525d872fd1d7407ca8cdd7cb7`` |
+| **crc32** | ``0b8d54d5`` |
 
 Checksums for: ``SectigoRSADomainValidationSecureServerCA.crt``:
 
