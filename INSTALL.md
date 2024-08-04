@@ -37,7 +37,7 @@ echo "\nPackage: grass*\nPin: release c=universe\nPin-Priority: -100\n" | sudo t
 Once you've done this, you'll need to run ``install-grass`` again.
 
 ```
-./install-grass.sh
+./install.sh
 ```
 
 Now when your system updates again, this shouldn't happen.
