@@ -502,24 +502,42 @@ function __install_cert() {
 		__error "c_rehash command not found, your system is missing the equivilent ca-certificates package.  Please install the ca-certificates package to continue."
 		return 1
 	fi
-	if [ ${DRY_RUN} -eq 1 ]; then
-		__info "DRY RUN: Would have copied certificate file: ${_cert_file} to /etc/ssl/certs/"
-		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
-		__info "DRY RUN: Would have updated certificate store"
-		return 0
+	if [ ! -f "/etc/ssl/certs/$(basename "${_cert_file}")" ]; then
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have copied certificate file to /etc/ssl/certs/"
+		else
+			__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
+				__error "Failed to copy certificate file to /etc/ssl/certs/"
+				return 1
+			}
+		fi
+	else
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have overwritten certificate file: /etc/ssl/certs/$(basename "${_cert_file}")"
+		else
+			__warn "Certificate file already exists: /etc/ssl/certs/$(basename "${_cert_file}"), it will be overwritten"
+			__run_command cp -f "${_cert_file}" /etc/ssl/certs/ || {
+				__error "Failed to copy certificate file to /etc/ssl/certs/"
+				return 1
+			}
+		fi
 	fi
-	__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
-		__error "Failed to copy certificate file to /etc/ssl/certs/"
-		return 1
-	}
-	__run_command c_rehash /etc/ssl/certs/ || {
-		__error "Failed to update certificate hash"
-		return 1
-	}
-	__run_command update-ca-certificates || {
-		__error "Failed to update certificate store"
-		return 1
-	}
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
+	else
+		__run_command c_rehash /etc/ssl/certs/ || {
+			__error "Failed to update certificate hash"
+			return 1
+		}
+	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate store"
+	else
+		__run_command update-ca-certificates || {
+			__error "Failed to update certificate store"
+			return 1
+		}
+	fi
 	__success "Certificate installed successfully"
 }
 function __uninstall_files() {
@@ -576,24 +594,36 @@ function __uninstall_cert() {
 		__error "c_rehash command not found, your system is missing the equivilent ca-certificates package.  Please install the ca-certificates package to continue."
 		return 1
 	fi
-	if [ ${DRY_RUN} -eq 1 ]; then
-		__info "DRY RUN: Would have removed certificate file: /etc/ssl/certs/$(basename "${_cert_file}")"
-		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
-		__info "DRY RUN: Would have updated certificate store"
+	if [ -f "/etc/ssl/certs/$(basename "${_cert_file}")" ]; then
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have removed certificate file: ${_cert_file}"
+		else 
+			__info "Removing certificate file: ${_cert_file}..."
+			run_command rm -f /etc/ssl/certs/$(basename "${_cert_file}") || {
+				__error "Failed to remove certificate file: ${_cert_file}"
+				return 1
+			}
+		fi
+	else
+		__warn "Certificate file not found: ${_cert_file}, skipping"
 		return 0
 	fi
-	__run_command rm -f /etc/ssl/certs/$(basename "${_cert_file}") || {
-		__error "Failed to remove certificate file: ${_cert_file}"
-		return 1
-	}
-	__run_command c_rehash /etc/ssl/certs/ || {
-		__error "Failed to update certificate hash"
-		return 1
-	}
-	__run_command update-ca-certificates || {
-		__error "Failed to update certificate store"
-		return 1
-	}
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
+	else 
+		__run_command c_rehash /etc/ssl/certs/ || {
+			__error "Failed to update certificate hash"
+			return 1
+		}
+	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate store"
+	else 
+		__run_command update-ca-certificates || {
+			__error "Failed to update certificate store"
+			return 1
+		}
+	fi
 	__success "Certificate removed successfully"
 }
 function __update_desktop_database() {
