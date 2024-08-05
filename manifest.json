@@ -1,6 +1,6 @@
 {
     "install": {
-        "grass_4.26.3_amd64.deb": {
+        "GrassDesktopNode": {
             "actions": [
                 {
                     "name": "download",
@@ -59,7 +59,7 @@
                 }
             ]
         },
-        "SectigoRSADomainValidationSecureServerCA.crt": {
+        "RSADomainValidationSecureServerIntermediateCA": {
             "actions": [
                 {
                     "name": "download",
@@ -95,6 +95,28 @@
                 },
                 {
                     "name": "install_cert",
+                    "args": {
+                        "filename": "SectigoRSADomainValidationSecureServerCA.crt"
+                    }
+                }
+            ]
+        }
+    },
+    "uninstall" : {
+        "GrassDesktopNode": {
+            "actions": [
+                {
+                    "name": "uninstall_folder",
+                    "args": {
+                        "source_folder": "grass_4.26.4_amd64"
+                    }
+                }
+            ]
+        },
+        "RSADomainValidationSecureServerIntermediateCA": {
+            "actions": [
+                {
+                    "name": "uninstall_cert",
                     "args": {
                         "filename": "SectigoRSADomainValidationSecureServerCA.crt"
                     }

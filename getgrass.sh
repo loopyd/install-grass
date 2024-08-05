@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 
-# install-grass: Install Grass on Any Linux!
-#
+####################################################################################################
+## getgrass: Install Grass on Any Linux!  v0.1.1
+## Authors: The Grass OGs <getgrass.io>
+## -------------------------------------------------------------------------------------------------
+##
+## This software is licensed under the MIT License.  You can modify and distribute it as you see fit
+## in accordance with the Software License.  Please see the LICENSE file provided with this software
+## for more information.
+##
+####################################################################################################
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "This installer must be run as root as it will make changes to file ownership and install files as necessary on your system." >&2
@@ -18,13 +26,18 @@ else
 fi
 
 CSCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ACTION=""
 CONFIG_FILE=${CONFIG_FILE:-"manifest.json"}
 INSTALL_PREFIX=${INSTALL_PREFIX:-"/usr"}
 CACHE_DIR=${CACHE_DIR:-"${CSCRIPT_DIR}/.grass-install"}
 USER_MODE=${USER_MODE:-0}
 DEBUG=${DEBUG:-0}
 LOGGING=${LOGGING:-1}
+QUIET=${QUIET:-0}
 LOG_FILE=${LOG_FILE:-"/var/log/grass-install.log"}
+LOGO=${LOGO:-1}
+DRY_RUN=${DRY_RUN:-0}
+APP_VERSION="0.1.1"
 
 # Colors
 C_RED=$(tput setaf 1)
@@ -33,6 +46,8 @@ C_YELLOW=$(tput setaf 3)
 C_BLUE=$(tput setaf 4)
 C_MAGENTA=$(tput setaf 5)
 C_CYAN=$(tput setaf 6)
+C_WHITE=$(tput setaf 7)
+C_GRAY=$(tput setaf 8)
 C_RESET=$(tput sgr0)
 C_BOLD=$(tput bold)
 C_UNDERLINE=$(tput smul)
@@ -75,13 +90,15 @@ function __log() {
 				_logstr="${C_CYAN}[${C_BOLD}INFO   ${C_RESET}${C_CYAN}] ${_logstr}${C_RESET}"
 				;;
 		esac
-		if [ ${DEBUG} -eq 1 ] && [ "${_loglevel}" == "DEBUG" ]; then
-			echo -e "${_logstr}" >&2
-		elif [ "${_loglevel}" != "DEBUG" ]; then
-			if [ "${_loglevel}" == "ERROR" ]; then
+		if [ ${QUIET} -eq 0 ]; then
+			if [ ${DEBUG} -eq 1 ] && [ "${_loglevel}" == "DEBUG" ]; then
 				echo -e "${_logstr}" >&2
-			else
-				echo -e "${_logstr}"
+			elif [ "${_loglevel}" != "DEBUG" ]; then
+				if [ "${_loglevel}" == "ERROR" ]; then
+					echo -e "${_logstr}" >&2
+				else
+					echo -e "${_logstr}"
+				fi
 			fi
 		fi
 		if [ ${LOGGING} -eq 1 ]; then
@@ -107,21 +124,33 @@ function __debug() {
 function _exit_trap() {
 	local _exit_code=$?
 	if [ ${_exit_code} -eq 0 ]; then
-		__success "Installation completed successfully"
+		__success "🌟 *** Program completed successfully"
 	else
-		__error "Installation failed with exit(${_exit_code}).  Please use the log located at: ${LOG_FILE} when submitting a bug report."
+		__error "❌ *** Program exited with status(${_exit_code})."
+		if [ ${LOGGING} -eq 1 ]; then
+			__error "❌ *** Log file stored at: ${LOG_FILE}"
+		fi
 	fi
 	return ${_exit_code}
 }
-trap _exit_trap EXIT ERR SIGINT SIGTERM
+trap _exit_trap EXIT ERR
 
 ####################################################################################################
 # DeLib Core library
 ####################################################################################################
 
 function __check_command() {
-	if ! command -v $1 &> /dev/null; then
-		return 1
+	if ! command -v "$1" &> /dev/null; then
+		if [ ! -f "$(which "$1" 2>/dev/null)" ]; then
+			__debug "$1 command not found"
+			return 1
+		fi
+	fi
+	if [ ! -x "$(command -v "$1")" ]; then
+		if [ ! -x "$(which "$1" 2>/dev/null)" ]; then
+			__debug "$1 command not executable"
+			return 1
+		fi
 	fi
 	return 0
 }
@@ -403,48 +432,225 @@ function __install_files() {
         return 1
     fi
     if [ ! -d "${_destination_folder}" ]; then
-        if ! mkdir -p "${_destination_folder}"; then
-            __error "Failed to create destination folder: ${_destination_folder}"
-            return 1
-        fi
+		if [ $DRY_RUN -eq 1 ]; then
+			__info "DRY RUN: Would have created destination folder: ${_destination_folder}"
+		else 
+			if ! mkdir -p "${_destination_folder}"; then
+				__error "Failed to create destination folder: ${_destination_folder}"
+				return 1
+			fi
+		fi
     fi
     find "${_base_folder}/usr" -type d | while read -r dir; do
         dest_dir="${_destination_folder}${dir#${_base_folder}/usr}"
-        if [ ! -d "${dest_dir}" ]; then
-            mkdir -p "${dest_dir}" || {
-				__error "Failed to create folder: ${dest_dir}"
-			}
-        fi
+		if [ ! -d "${dest_dir}" ]; then
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have created folder: ${dest_dir}"
+			else
+				mkdir -p "${dest_dir}" || {
+					__error "Failed to create folder: ${dest_dir}"
+				}
+			fi
+		fi
     done
     find "${_base_folder}/usr" -type f | while read -r file; do
         dest_file="${_destination_folder}${file#${_base_folder}/usr}"
-        __run_command cp ${file} ${dest_file} || {
-            __error "Failed to copy ${file} to ${dest_file}"
-            return 1
-        }
+		if [ ! -f "${dest_file}" ]; then
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have copied ${file} to ${dest_file}"
+			else
+				__run_command cp ${file} ${dest_file} || {
+					__error "Failed to copy ${file} to ${dest_file}"
+					return 1
+				}
+			fi
+		else
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have overwritten ${dest_file}"
+			else
+				__run_command cp -f ${file} ${dest_file} || {
+					__error "Failed to overwrite ${file} to ${dest_file}"
+					return 1
+				}
+			fi
+		fi
         if [ $_usermode -eq 1 ]; then
-            __run_command chown $(whoami):$(whoami) "${dest_file}" || {
-                __error "Failed to change ownership of ${dest_file}"
-                return 1
-            }
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have changed ownership of ${dest_file} to ${USER_NAME}:${USER_NAME}"
+			else
+				__run_command chown ${USER_NAME}:${USER_NAME} "${dest_file}" || {
+					__error "Failed to change ownership of ${dest_file}"
+					return 1
+				}
+			fi
         fi
-		__run_command chmod 0755 "${dest_file}" || {
-			__error "Failed to change permissions of ${dest_file}"
-			return 1
-		}
+		if [ $DRY_RUN -eq 1 ]; then
+			__info "DRY RUN: Would have changed permissions of ${dest_file} to 0755"
+		else
+			__run_command chmod 0755 "${dest_file}" || {
+				__error "Failed to change permissions of ${dest_file}"
+				return 1
+			}
+		fi
     done
     __success "Files copied to ${_destination_folder} successfully"
 	return 0
 }
-function __update_desktop_database() {
-	if ! __check_command $(which update-desktop-database); then
-		__warning -e "update-desktop-database utility not found, please update your xdg-utils package and run:\n\nupdate-desktop-database ~/.local/share/applications if you'd like grass to be in your session menu."
+function __install_cert() {
+	local _cert_file=$1
+	if [ -z "${_cert_file}" ]; then
+		__error "Certificate file not provided"
+		return 1
+	fi
+	if [ ! -f "${_cert_file}" ]; then
+		__error "Certificate file not found: ${_cert_file}"
+		return 1
+	fi
+	if ! __check_command update-ca-certificates; then
+		__error "update-ca-certificates command not found, your system is missing the equivilent ca-certificates package.  Please install the ca-certificates package to continue."
+		return 1
+	fi
+	if ! __check_command c_rehash; then
+		__error "c_rehash command not found, your system is missing the equivilent ca-certificates package.  Please install the ca-certificates package to continue."
+		return 1
+	fi
+	if [ ! -f "/etc/ssl/certs/$(basename "${_cert_file}")" ]; then
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have copied certificate file to /etc/ssl/certs/"
+		else
+			__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
+				__error "Failed to copy certificate file to /etc/ssl/certs/"
+				return 1
+			}
+		fi
 	else
-		$(which su) -s $(which bash) $USER_NAME -c "update-desktop-database /home/${USER_NAME}/.local/share/applications" || {
-			__error "Failed to update desktop database"
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have overwritten certificate file: /etc/ssl/certs/$(basename "${_cert_file}")"
+		else
+			__warn "Certificate file already exists: /etc/ssl/certs/$(basename "${_cert_file}"), it will be overwritten"
+			__run_command cp -f "${_cert_file}" /etc/ssl/certs/ || {
+				__error "Failed to copy certificate file to /etc/ssl/certs/"
+				return 1
+			}
+		fi
+	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
+	else
+		__run_command c_rehash /etc/ssl/certs/ || {
+			__error "Failed to update certificate hash"
 			return 1
 		}
 	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate store"
+	else
+		__run_command update-ca-certificates || {
+			__error "Failed to update certificate store"
+			return 1
+		}
+	fi
+	__success "Certificate installed successfully"
+}
+function __uninstall_files() {
+	local _base_folder _destination_folder
+	_base_folder=$1
+	if [ -z "${_base_folder}" ]; then
+		__error "Base folder not provided"
+		return 1
+	fi
+	if [ ! -d "${_base_folder}" ]; then
+		__error "Base folder not found: ${_base_folder}"
+		return 1
+	fi
+	shift 1
+	_destination_folder=$1
+	if [ ! -d "${_destination_folder}" ]; then
+		__error "Destination folder not found: ${_destination_folder}"
+		return 1
+	fi
+	shift 1
+	find "${_base_folder}/usr" -type f | while read -r file; do
+		dest_file="${_destination_folder}${file#${_base_folder}/usr}"
+		if [ ! -f "${dest_file}" ]; then
+			__warn "File not found: ${dest_file}, skipping"
+			continue
+		fi
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have removed file: ${dest_file}"
+			continue
+		fi
+		__run_command rm -f "${dest_file}" || {
+			__error "Failed to remove file: ${dest_file}"
+			return 1
+		}
+	done
+	__success "Files removed successfully"
+	return 0
+}
+function __uninstall_cert() {
+	local _cert_file=$1
+	if [ -z "${_cert_file}" ]; then
+		__error "Certificate file not provided"
+		return 1
+	fi
+	if [ ! -f "${_cert_file}" ]; then
+		__error "Certificate file not found: ${_cert_file}"
+		return 1
+	fi
+	if ! __check_command update-ca-certificates; then
+		__error "update-ca-certificates command not found, your system is missing the equivilent ca-certificates package.  Please install the ca-certificates package to continue."
+		return 1
+	fi
+	if ! __check_command c_rehash; then
+		__error "c_rehash command not found, your system is missing the equivilent ca-certificates package.  Please install the ca-certificates package to continue."
+		return 1
+	fi
+	if [ -f "/etc/ssl/certs/$(basename "${_cert_file}")" ]; then
+		if [ ${DRY_RUN} -eq 1 ]; then
+			__info "DRY RUN: Would have removed certificate file: ${_cert_file}"
+		else 
+			__info "Removing certificate file: ${_cert_file}..."
+			run_command rm -f /etc/ssl/certs/$(basename "${_cert_file}") || {
+				__error "Failed to remove certificate file: ${_cert_file}"
+				return 1
+			}
+		fi
+	else
+		__warn "Certificate file not found: ${_cert_file}, skipping"
+		return 0
+	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
+	else 
+		__run_command c_rehash /etc/ssl/certs/ || {
+			__error "Failed to update certificate hash"
+			return 1
+		}
+	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated certificate store"
+	else 
+		__run_command update-ca-certificates || {
+			__error "Failed to update certificate store"
+			return 1
+		}
+	fi
+	__success "Certificate removed successfully"
+}
+function __update_desktop_database() {
+	if ! __check_command update-desktop-database; then
+		__warn "update-desktop-database utility not found, please update your xdg-utils package and run:\n\nupdate-desktop-database ~/.local/share/applications if you'd like grass to be in your session menu."
+		return 0
+	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated ${USER_NAME}'s Xdesktop database"
+		return 0
+	fi
+	__run_command "$(which su) -s $(which bash) $USER_NAME -c \"update-desktop-database /home/${USER_NAME}/.local/share/applications\"" || {
+		__error "Failed to update ${USER_NAME}'s Xdesktop database"
+		return 1
+	}
 	__success "Desktop database updated successfully"
 	return 0
 }
@@ -467,34 +673,6 @@ function __display_dependencies() {
 	done
 	__info "Please install the dependencies manually using your system's package manager"
 }
-function __install_cert() {
-	local _cert_file=$1
-	if [ -z "${_cert_file}" ]; then
-		__error "Certificate file not provided"
-		return 1
-	fi
-	if [ ! -f "${_cert_file}" ]; then
-		__error "Certificate file not found: ${_cert_file}"
-		return 1
-	fi
-	if ! __check_command $(which update-ca-certificates); then
-		__error "update-ca-certificates command not found"
-		return 1
-	fi
-	__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
-		__error "Failed to copy certificate file to /etc/ssl/certs/"
-		return 1
-	}
-	__run_command c_rehash /etc/ssl/certs/ || {
-		__error "Failed to update certificate hash"
-		return 1
-	}
-	__run_command update-ca-certificates || {
-		__error "Failed to update certificate store"
-		return 1
-	}
-	__success "Certificate installed successfully"
-}
 function __process_node() {
     local _node_name=$1
     if [ -z "${_node_name}" ]; then
@@ -516,7 +694,7 @@ function __process_node() {
 	declare -a _actions
     mapfile -t _actions <<<"$(echo "${_config_json}" | jq -r '.actions[] | .name')"
     if [ -z "${_actions[*]}" ] || [ ${#_actions[@]} -eq 0 ]; then
-        __error "No actions found in manifest for file: ${_node_name}"
+        __error "No actions found in manifest for node: ${_node_name}"
         return 1
     fi
 	local _index
@@ -536,7 +714,7 @@ function __process_node() {
 				_file_id=$(echo "${_args_json}" | jq -r '.file_id')
 				if [ "${_type}" == "gdrive" ]; then
 					__info "Downloading file: ${_file_name} using gdrive method to ${_output_file}..."
-					__download_file_gdrive "${_file_id}" "${_output_file}" || return 
+					__download_file_gdrive "${_file_id}" "${_output_file}" || return $?
 				else
 					__error "Unsupported download type: ${_type}"
 					return 1
@@ -564,11 +742,25 @@ function __process_node() {
                 __install_files "${_source_dir}" "${INSTALL_PREFIX}" "${USER_MODE}" || return $?
                 ;;
             "install_cert")
+				local _output_file
+				_output_file="${CACHE_DIR}/$(echo "${_args_json}" | jq -r '.filename')"
                 __info "Installing certificate: ${_output_file}..."
                 __install_cert "${_output_file}" || return $?
                 ;;
+			"uninstall_folder")
+				local _source_dir
+				_source_dir="${CACHE_DIR}/$(echo "${_args_json}" | jq -r '.source_folder')"
+				__info "Uninstalling via deb package cache folder: ${_source_dir}..."
+				__uninstall_files "${_source_dir}" "${INSTALL_PREFIX}" || return $?
+				;;
+			"uninstall_cert")
+				local _output_file
+				_output_file="${CACHE_DIR}/$(echo "${_args_json}" | jq -r '.filename')"
+				__info "Uninstalling certificate: ${_output_file}..."
+				__uninstall_cert "${_output_file}" || return $?
+				;;
             "update_desktop_database")
-                __info "Updating desktop database..."
+                __info "Updating ${USER_NAME}'s X desktop database..."
                 __update_desktop_database || return $?
                 ;;
             "display_dependencies")
@@ -585,7 +777,8 @@ function __process_node() {
     done
 }
 function __process_manifest() {
-    local _manifest_file=$1
+    local _manifest_file _action _manifest_json
+	_manifest_file="$1"
     if [ -z "${_manifest_file}" ]; then
         echo "Manifest file not provided" >&2
         return 1
@@ -594,9 +787,29 @@ function __process_manifest() {
         echo "Manifest file not found: ${_manifest_file}" >&2
         return 1
     fi
-    for node_name in $(jq -r '.install | keys[]' "${_manifest_file}"); do
-        _manifest_install_json=$(jq -r --arg node_name "${node_name}" '.install[$node_name]' "${_manifest_file}")
-        __process_node "${node_name}" "${_manifest_install_json}" || exit $?
+	shift 1
+	_manifest_action="$1"
+	if [ -z "${_manifest_action}" ]; then
+		__error "Action not provided, please run -h | --help for usage information"
+		return 1
+	fi
+	if ! __check_command jq; then
+		__error "jq binary not found, please install jq via your system's package manager to continue"
+		return 1
+	fi
+	if ! __check_command ar; then
+		__error "ar binary not found, please install binutils and libarchive-rip-perl via your system's package manager to continue"
+		return 1
+	fi
+	local _actions=()
+	IFS=$'\n' mapfile -t _actions <<<"$(jq -r --arg action "${_manifest_action}" '.[$action] | keys[]' "${_manifest_file}")"
+	if [ ${#_actions[@]} -eq 0 ]; then
+		__error "No actions found in manifest for action: ${_manifest_action}"
+		return 1
+	fi
+    for node_name in "${_actions[@]}"; do
+        _manifest_json=$(jq -r --arg action "${_manifest_action}" --arg node_name "${node_name}" '.[$action][$node_name]' "${_manifest_file}")
+		__process_node "${node_name}" "${_manifest_json}" || return $?
     done
 }
 
@@ -605,6 +818,9 @@ function __process_manifest() {
 ####################################################################################################
 
 __logo() {
+	if [ ${LOGO} -eq 0 ]; then
+		return 0
+	fi
 	cat <<EOF
                   ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
              ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
@@ -639,13 +855,307 @@ __logo() {
              ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
                  ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
 
-        ${C_YELLOW}GetGrass-Installer${C_RESET} ${C_CYAN}Install ${C_GREEN}Grass Desktop Node${C_CYAN} on ${C_BOLD}Any Linux${C_RESET}${C_CYAN}!${C_RESET}
+${C_YELLOW}GetGrass${C_RESET} ${C_CYAN}Install ${C_GREEN}Grass Desktop Node${C_CYAN} on ${C_BOLD}Any Linux${C_RESET}${C_CYAN}!${C_RESET}
+${C_GREEN}Authors:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_BLUE}${C_UNDERLINE}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
+${C_GREEN}License:${C_RESET} ${C_YELLOW}${C_BOLD}MIT Software License${C_RESET} ${C_GREEN}|${C_RESET} ${C_MAGENTA}${C_BOLD}v${APP_VERSION}${C_RESET}
 
-            	${C_CYAN}Author:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_WHITE}${C_BOLD}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
-                ${C_CYAN}License:${C_RESET} ${C_YELLOW}${C_BOLD}MIT${C_RESET} ${YELLOW}|${C_RESET} ${C_YELLOW}Version:${C_RESET} ${C_GREEN}${C_BOLD}0.1.0${C_RESET}
+This program is free software: You can redistribute it and/or modify it under the terms of
+the ${C_BOLD}MIT License${C_RESET}.  Please see the ${C_BOLD}LICENSE${C_RESET} file included with this software for more details.
 
 EOF
 }
+__parse_args() {
+	local _bargs
+	_bargs=()
+	if [ $# -eq 0 ] || [ -z "$1" ]; then
+		ACTION="install"
+		__warn "No action provided, defaulting to ${C_BOLD}install${C_RESET}"
+		return 0
+	else
+		ACTION="$1"
+		if [ "${ACTION}" == "-h" ] || [ "${ACTION}" == "--help" ] || [ "x${ACTION}x" == "xx" ]; then
+			__usage "default"
+			return 0
+		fi
+		shift 1
+	fi
+	case "$ACTION" in
+		"install")
+			while [ $# -gt 0 ]; do
+				case "$1" in
+					-c|--config-file)
+						if [ -z "$2" ]; then
+							__error "-c | --config-file requires a file argument"
+							__usage "install"
+							return 1
+						fi
+						CONFIG_FILE="$2"
+						shift 2
+						;;
+					-i|--install-prefix)
+						if [ -z "$2" ]; then
+							__error "-i | --install-prefix requires a directory argument"
+							__usage "install"
+							return 1
+						fi
+						INSTALL_PREFIX="$2"
+						shift 2
+						;;
+					-e|--cache-dir)
+						if [ -z "$2" ]; then
+							__error "-e | --cache-dir requires a directory argument"
+							__usage "install"
+							return 1
+						fi
+						CACHE_DIR="$2"
+						shift 2
+						;;
+					-l|--log-file)
+						if [ -z "$2" ]; then
+							__error "-l | --log-file requires a file argument"
+							__usage "install"
+							return 1
+						fi
+						LOG_FILE="$2"
+						shift 2
+						;;
+					-u|--user-mode)
+						USER_MODE=1
+						shift 1
+						;;
+					-d|--debug)
+						DEBUG=1
+						shift 1
+						;;
+					-x|--no-logging)
+						LOGGING=0
+						shift 1
+						;;
+					-z|--no-logo)
+						LOGO=0
+						shift 1
+						;;
+					-D|--dry-run)
+						DRY_RUN=1
+						shift 1
+						;;
+					-q|--quiet)
+						QUIET=1
+						shift 1
+						;;
+					-h|--help)
+						__usage "install"
+						return 1
+						;;
+					*)
+						_bargs+=("$1")
+						shift 1
+						;;
+				esac
+			done
+			;;
+		"uninstall")
+			while [ $# -gt 0 ]; do
+				case "$1" in
+					-c|--config-file)
+						if [ -z "$2" ]; then
+							__error "-c | --config-file requires a file argument"
+							__usage "uninstall"
+							return 1
+						fi
+						CONFIG_FILE="$2"
+						shift 2
+						;;
+					-i|--install-prefix)
+						if [ -z "$2" ]; then
+							__error "-i | --install-prefix requires a directory argument"
+							__usage "uninstall"
+							return 1
+						fi
+						INSTALL_PREFIX="$2"
+						shift 2
+						;;
+					-e|--cache-dir)
+						if [ -z "$2" ]; then
+							__error "-e | --cache-dir requires a directory argument"
+							__usage "uninstall"
+							return 1
+						fi
+						CACHE_DIR="$2"
+						shift 2
+						;;
+					-l|--log-file)
+						if [ -z "$2" ]; then
+							__error "-l | --log-file requires a file argument"
+							__usage "uninstall"
+							return 1
+						fi
+						LOG_FILE="$2"
+						shift 2
+						;;
+					-d|--debug)
+						DEBUG=1
+						shift 1
+						;;
+					-x|--no-logging)
+						LOGGING=0
+						shift 1
+						;;
+					-D|--dry-run)
+						DRY_RUN=1
+						shift 1
+						;;
+					-q|--quiet)
+						QUIET=1
+						shift 1
+						;;
+					-z|--no-logo)
+						LOGO=0
+						shift 1
+						;;
+					-h|--help)
+						__usage "uninstall"
+						return 1
+						;;
+					*)
+						_bargs+=("$1")
+						;;
+				esac
+			done
+			;;
+		*)
+			__error "Invalid action: ${ACTION}"
+			__usage "default"
+			return 1
+			;;
+	esac
+	if [ ${#_bargs[@]} -gt 0 ]; then
+		__error "Invalid arguments provided: ${C_BOLD}${_bargs[*]}${C_RESET}, please see -h | --help for usage instructions"
+		return 1
+	fi
+	return 0
+}
+__usage() {
+	local _action
+	if [ $# -eq 0 ]; then
+		_action="default"
+	else
+		_action="$1"
+		shift 1
+	fi
+	cat <<EOF
+${C_BOLD}${C_GREEN}GetGrass${C_RESET} ${C_CYAN}Desktop Node Installer${C_RESET} ${C_MAGENTA}v${APP_VERSION}${C_RESET}
+${C_BOLD}${C_YELLOW}Authors:${C_RESET} ${C_WHITE}The Grass OGs${C_RESET} ${C_GREEN}<${C_UNDERLINE}${C_BLUE}https://getgrass.io${C_RESET}${C_GREEN}>${C_RESET}
 
-__logo
-__process_manifest "${CONFIG_FILE}"
+This program is ${C_GREEN}free software${C_RESET}: you can redistribute and/or modify under the terms of the ${C_BOLD}${C_GREEN}MIT License${C_RESET}.
+Please review the ${C_BOLD}LICENSE${C_RESET} file that comes with this software for more information.
+
+EOF
+	# NOTE: When choosing to add new actions or edit be mindful of spatial awareness and tabs :)
+	case "${_action}" in
+		"default")
+			cat <<EOF
+Usage: ${C_BOLD}$0${C_RESET} [action] [options]
+
+${C_BOLD}Actions${C_RESET}:
+	install     Install the Grass Desktop Node
+	uninstall   Uninstall the Grass Desktop Node
+
+${C_BOLD}Options${C_RESET}:
+
+	-h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
+
+For more information, you can run -h or --help for usage instructions on each action.
+EOF
+			;;
+		"install")
+			cat <<EOF
+Usage: ${C_BOLD}$0${C_RESET} install [options]
+
+Help page for the ${C_BOLD}install${C_RESET} action
+
+${C_BOLD}Options${C_RESET}:
+
+    -h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
+    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Manifest configuration file to use
+    -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we install the
+                                     application in this directory rather than the defaults.
+    -e, --cache-dir       ${C_GRAY}<dir>${C_RESET}      Cache directory, if specified then we use this directory
+                                     to store downloaded files.  Its important that you keep
+                                     this directory around as its important for uninstallation.
+    -u, --user-mode       ${C_GRAY}<switch>${C_RESET}   Install in user mode, if specified then we try to install
+                                     the application owned by the user.
+    -d, --debug           ${C_GRAY}<switch>${C_RESET}   Enable debug mode, if specified then you get a lot of
+                                     debug information in the terminal.
+    -x, --no-logging      ${C_GRAY}<switch>${C_RESET}   Disable logging, if specified
+    -l, --log-file        ${C_GRAY}<file>${C_RESET}     Log file to use, if -x | --no-logging is specified
+                                     then this option is ignored.
+    -q, --quiet           ${C_GRAY}<switch>${C_RESET}   Quiet mode, if specified we don't print anything
+                                     in the terminal.
+    -z, --no-logo         ${C_GRAY}<switch>${C_RESET}   Disable the logo, if specified we don't print the logo
+    -D, --dry-run         ${C_GRAY}<switch>${C_RESET}   Dry run mode, if specified we don't install anything
+                                     but we print the steps that would be taken.  Downloads
+                                     still occur into the cache directory.
+EOF
+			;;
+		"uninstall")
+			cat <<EOF
+Usage: ${C_BOLD}$0${C_RESET} uninstall [options]
+
+Help page for the ${C_BOLD}uninstall${C_RESET} action
+
+${C_BOLD}Options${C_RESET}:
+
+    -h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
+    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Manfiest configuration file to use
+    -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we look for the
+                                     application in this directory rather than the defaults.
+    -e, --cache-dir       ${C_GRAY}<dir>${C_RESET}      Cache directory, if specified then we use this directory
+                                     to store downloaded files.  Its important that you keep
+                                     this directory around as its important for uninstallation.
+    -d, --debug           ${C_GRAY}<switch>${C_RESET}   Enable debug mode, if specified then you get a lot of
+                                     debug information in the terminal.
+    -x, --no-logging      ${C_GRAY}<switch>${C_RESET}   Disable logging, if specified then we don't print
+                                     anything in the terminal.
+    -l, --log-file        ${C_GRAY}<file>${C_RESET}     Log file to use, if -x | --no-logging is specified
+                                     then this option is ignored.
+    -q, --quiet           ${C_GRAY}<switch>${C_RESET}   Quiet mode, if specified we don't print anything
+                                     in the terminal.
+    -z, --no-logo         ${C_GRAY}<switch>${C_RESET}   Disable the logo, if specified we don't print the logo
+    -D, --dry-run         ${C_GRAY}<switch>${C_RESET}   Dry run mode, if specified we don't uninstall anything
+                                     but we print the steps that would be taken.  Downloads
+                                     still occur into the cache directory.
+EOF
+			;;
+		*)
+			__error "Invalid usage action: ${_action}"
+			return 1
+			;;
+	esac
+	QUIET=1
+	LOGGING=0
+	return 0
+}
+__main() {
+	local _args
+	_args=($*)
+	__parse_args ${_args[*]} || return $?
+	case "${ACTION}" in
+		"install")
+			__logo
+			__success "🌱 *** Program initialized, lets get grass!"
+			__process_manifest "${CONFIG_FILE}" "${ACTION}" || return $?
+			;;
+		"uninstall")
+			__logo
+			__success "🦎 *** Program initialized, lets cut the grass!"
+			__process_manifest "${CONFIG_FILE}" "${ACTION}" || return $?
+			;;
+		*)
+			__error "Invalid action: ${ACTION}"
+			__usage "default"
+			return 1
+			;;
+	esac
+}
+__main $@ || exit $?
