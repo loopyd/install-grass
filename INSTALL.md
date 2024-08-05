@@ -5,8 +5,8 @@ The installer file:  ``install.sh`` will source and download the extension, and 
 ```
 git clone https://github.com/loopyd/install-grass.git
 cd install-grass
-chmod +x ./install-grass.sh
-sudo ./install-grass.sh
+chmod +x ./install.sh
+sudo ./install.sh
 ```
 
 On some distrobutions, installation of additional packages will be required.  The installer will prompt you which to search your package manager for, and install **manually**.  The names of the packages **may vary** based upon your distrobution.  You can access your package maintainer's resources to locate and install the nessecary packages.
@@ -37,7 +37,7 @@ echo "\nPackage: grass*\nPin: release c=universe\nPin-Priority: -100\n" | sudo t
 Once you've done this, you'll need to run ``install-grass`` again.
 
 ```
-./install-grass.sh
+./install.sh
 ```
 
 Now when your system updates again, this shouldn't happen.
