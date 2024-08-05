@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# install-grass: Install Grass on Any Linux!
+# getgrass: Install Grass on Any Linux!
 #
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -431,10 +431,10 @@ function __install_files() {
     fi
     find "${_base_folder}/usr" -type d | while read -r dir; do
         dest_dir="${_destination_folder}${dir#${_base_folder}/usr}"
-		if [ $DRY_RUN -eq 1 ]; then
-			__info "DRY RUN: Would have created folder: ${dest_dir}"
-		else
-			if [ ! -d "${dest_dir}" ]; then
+		if [ ! -d "${dest_dir}" ]; then
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have created folder: ${dest_dir}"
+			else
 				mkdir -p "${dest_dir}" || {
 					__error "Failed to create folder: ${dest_dir}"
 				}
@@ -443,13 +443,24 @@ function __install_files() {
     done
     find "${_base_folder}/usr" -type f | while read -r file; do
         dest_file="${_destination_folder}${file#${_base_folder}/usr}"
-		if [ $DRY_RUN -eq 1 ]; then
-			__info "DRY RUN: Would have copied ${file} to ${dest_file}"
+		if [ ! -f "${dest_file}" ]; then
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have copied ${file} to ${dest_file}"
+			else
+				__run_command cp ${file} ${dest_file} || {
+					__error "Failed to copy ${file} to ${dest_file}"
+					return 1
+				}
+			fi
 		else
-			__run_command cp ${file} ${dest_file} || {
-				__error "Failed to copy ${file} to ${dest_file}"
-				return 1
-			}
+			if [ $DRY_RUN -eq 1 ]; then
+				__info "DRY RUN: Would have overwritten ${dest_file}"
+			else
+				__run_command cp -f ${file} ${dest_file} || {
+					__error "Failed to overwrite ${file} to ${dest_file}"
+					return 1
+				}
+			fi
 		fi
         if [ $_usermode -eq 1 ]; then
 			if [ $DRY_RUN -eq 1 ]; then
@@ -532,7 +543,7 @@ function __uninstall_files() {
 	find "${_base_folder}/usr" -type f | while read -r file; do
 		dest_file="${_destination_folder}${file#${_base_folder}/usr}"
 		if [ ! -f "${dest_file}" ]; then
-			__warn "File not found for uninstall operation: ${dest_file}"
+			__warn "File not found: ${dest_file}, skipping"
 			continue
 		fi
 		if [ ${DRY_RUN} -eq 1 ]; then
@@ -566,7 +577,7 @@ function __uninstall_cert() {
 		return 1
 	fi
 	if [ ${DRY_RUN} -eq 1 ]; then
-		__info "DRY RUN: Would have removed certificate file: ${_cert_file}"
+		__info "DRY RUN: Would have removed certificate file: /etc/ssl/certs/$(basename "${_cert_file}")"
 		__info "DRY RUN: Would have updated certificate hash in /etc/ssl/certs/"
 		__info "DRY RUN: Would have updated certificate store"
 		return 0
@@ -702,6 +713,12 @@ function __process_node() {
 				__info "Uninstalling via deb package cache folder: ${_source_dir}..."
 				__uninstall_files "${_source_dir}" "${INSTALL_PREFIX}" || return $?
 				;;
+			"uninstall_cert")
+				local _output_file
+				_output_file="${CACHE_DIR}/$(echo "${_args_json}" | jq -r '.filename')"
+				__info "Uninstalling certificate: ${_output_file}..."
+				__uninstall_cert "${_output_file}" || return $?
+				;;
             "update_desktop_database")
                 __info "Updating desktop database..."
                 __update_desktop_database || return $?
@@ -720,7 +737,7 @@ function __process_node() {
     done
 }
 function __process_manifest() {
-    local _manifest_file _action
+    local _manifest_file _action _manifest_json
 	_manifest_file="$1"
     if [ -z "${_manifest_file}" ]; then
         echo "Manifest file not provided" >&2
@@ -731,8 +748,8 @@ function __process_manifest() {
         return 1
     fi
 	shift 1
-	_action="$1"
-	if [ -z "${_action}" ]; then
+	_manifest_action="$1"
+	if [ -z "${_manifest_action}" ]; then
 		__error "Action not provided, please run -h | --help for usage information"
 		return 1
 	fi
@@ -745,16 +762,14 @@ function __process_manifest() {
 		return 1
 	fi
 	local _actions=()
-	__debug "Checking manifest for actions for action: ${_action}"
-	IFS=$'\n' mapfile -t _actions <<<"$(jq -r ".${_action} | keys[]" "${_manifest_file}")"
-	__debug "Actions found: ${_actions[*]}"
+	IFS=$'\n' mapfile -t _actions <<<"$(jq -r --arg action "${_manifest_action}" '.[$action] | keys[]' "${_manifest_file}")"
 	if [ ${#_actions[@]} -eq 0 ]; then
-		__error "No actions found in manifest for action: ${_action}"
+		__error "No actions found in manifest for action: ${_manifest_action}"
 		return 1
 	fi
     for node_name in "${_actions[@]}"; do
-        _manifest_install_json=$(jq -r --arg node_name "${node_name}" '.install[$node_name]' "${_manifest_file}")
-        __process_node "${node_name}" "${_manifest_install_json}" || exit $?
+        _manifest_json=$(jq -r --arg action "${_manifest_action}" --arg node_name "${node_name}" '.[$action][$node_name]' "${_manifest_file}")
+		__process_node "${node_name}" "${_manifest_json}" || return $?
     done
 }
 

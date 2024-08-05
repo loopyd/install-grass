@@ -1,19 +1,19 @@
 ## How to Install
 
-The installer file:  ``install.sh`` will source and download the extension, and place the files where they need to be on your system correctly.  You can run the following commands:
+The installer file:  ``getgrass.sh`` will source and download the extension, and place the files where they need to be on your system correctly.  You can run the following commands:
 
 ```
 git clone https://github.com/loopyd/install-grass.git
 cd install-grass
-chmod +x ./install.sh
-sudo ./install.sh
+chmod +x ./getgrass.sh
+sudo ./getgrass.sh
 ```
 
 On some distrobutions, installation of additional packages will be required.  The installer will prompt you which to search your package manager for, and install **manually**.  The names of the packages **may vary** based upon your distrobution.  You can access your package maintainer's resources to locate and install the nessecary packages.
 
 ## How to Update
 
-> ⚠️ The ``install-grass`` utility runs as the root user.  This means that permissions for manually installed files are owned by the root (UID=0, GID=0) user.  You will see the message "Update failed" in your Desktop Node when using ``install-grass``.  This is normal.  Extraction with ``ar`` via ``binutils`` is not able to preserve original ACLs, which is why this happens.
+> ⚠️ The ``getgrass`` utility runs as the root user.  This means that permissions for manually installed files are owned by the root (UID=0, GID=0) user.  You will see the message "Update failed" in your Desktop Node when using ``getgrass``.  This is normal.  Extraction with ``ar`` via ``binutils`` is not able to preserve original ACLs, which is why this happens.
 
 To update your node, close your Desktop Node by right-clicking and selecting "Quit" from your Window Manager's taskbar, then open a terminal and type:
 
@@ -34,7 +34,7 @@ sudo apt-get remove grass* -y
 echo "\nPackage: grass*\nPin: release c=universe\nPin-Priority: -100\n" | sudo tee -a /etc/apt/preferences.d/99-priority
 ```
 
-Once you've done this, you'll need to run ``install-grass`` again.
+Once you've done this, you'll need to run ``getgrass`` again.
 
 ```
 ./install.sh

@@ -116,7 +116,7 @@
         "RSADomainValidationSecureServerIntermediateCA": {
             "actions": [
                 {
-                    "name": "remove_cert",
+                    "name": "uninstall_cert",
                     "args": {
                         "filename": "SectigoRSADomainValidationSecureServerCA.crt"
                     }
