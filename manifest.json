@@ -1,6 +1,6 @@
 {
     "install": {
-        "grass_4.26.3_amd64.deb": {
+        "Grass Desktop Node": {
             "actions": [
                 {
                     "name": "download",
@@ -59,7 +59,7 @@
                 }
             ]
         },
-        "SectigoRSADomainValidationSecureServerCA.crt": {
+        "RSA Domain Validation SecureServer Intermediate CA": {
             "actions": [
                 {
                     "name": "download",
@@ -101,6 +101,9 @@
                 }
             ]
         }
+    },
+    "uninstall" : {
+        
     },
     "dependencies": {
         "ubuntu": [

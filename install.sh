@@ -18,13 +18,16 @@ else
 fi
 
 CSCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ACTION=""
 CONFIG_FILE=${CONFIG_FILE:-"manifest.json"}
 INSTALL_PREFIX=${INSTALL_PREFIX:-"/usr"}
 CACHE_DIR=${CACHE_DIR:-"${CSCRIPT_DIR}/.grass-install"}
 USER_MODE=${USER_MODE:-0}
 DEBUG=${DEBUG:-0}
 LOGGING=${LOGGING:-1}
+QUIET=${QUIET:-0}
 LOG_FILE=${LOG_FILE:-"/var/log/grass-install.log"}
+LOGO=${LOGO:-1}
 
 # Colors
 C_RED=$(tput setaf 1)
@@ -33,6 +36,8 @@ C_YELLOW=$(tput setaf 3)
 C_BLUE=$(tput setaf 4)
 C_MAGENTA=$(tput setaf 5)
 C_CYAN=$(tput setaf 6)
+C_WHITE=$(tput setaf 7)
+C_GRAY=$(tput setaf 8)
 C_RESET=$(tput sgr0)
 C_BOLD=$(tput bold)
 C_UNDERLINE=$(tput smul)
@@ -75,13 +80,15 @@ function __log() {
 				_logstr="${C_CYAN}[${C_BOLD}INFO   ${C_RESET}${C_CYAN}] ${_logstr}${C_RESET}"
 				;;
 		esac
-		if [ ${DEBUG} -eq 1 ] && [ "${_loglevel}" == "DEBUG" ]; then
-			echo -e "${_logstr}" >&2
-		elif [ "${_loglevel}" != "DEBUG" ]; then
-			if [ "${_loglevel}" == "ERROR" ]; then
+		if [ ${QUIET} -eq 0 ]; then
+			if [ ${DEBUG} -eq 1 ] && [ "${_loglevel}" == "DEBUG" ]; then
 				echo -e "${_logstr}" >&2
-			else
-				echo -e "${_logstr}"
+			elif [ "${_loglevel}" != "DEBUG" ]; then
+				if [ "${_loglevel}" == "ERROR" ]; then
+					echo -e "${_logstr}" >&2
+				else
+					echo -e "${_logstr}"
+				fi
 			fi
 		fi
 		if [ ${LOGGING} -eq 1 ]; then
@@ -436,6 +443,78 @@ function __install_files() {
     __success "Files copied to ${_destination_folder} successfully"
 	return 0
 }
+function __install_cert() {
+	local _cert_file=$1
+	if [ -z "${_cert_file}" ]; then
+		__error "Certificate file not provided"
+		return 1
+	fi
+	if [ ! -f "${_cert_file}" ]; then
+		__error "Certificate file not found: ${_cert_file}"
+		return 1
+	fi
+	if ! __check_command $(which update-ca-certificates); then
+		__error "update-ca-certificates command not found"
+		return 1
+	fi
+	__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
+		__error "Failed to copy certificate file to /etc/ssl/certs/"
+		return 1
+	}
+	__run_command c_rehash /etc/ssl/certs/ || {
+		__error "Failed to update certificate hash"
+		return 1
+	}
+	__run_command update-ca-certificates || {
+		__error "Failed to update certificate store"
+		return 1
+	}
+	__success "Certificate installed successfully"
+}
+function __uninstall_files() {
+	local _base_folder=$1
+	if [ -z "${_base_folder}" ]; then
+		__error "Base folder not provided"
+		return 1
+	fi
+	if [ ! -d "${_base_folder}" ]; then
+		__error "Base folder not found: ${_base_folder}"
+		return 1
+	fi
+	find "${_base_folder}/usr" -type f | while read -r file; do
+		dest_file="${_destination_folder}${file#${_base_folder}/usr}"
+		__run_command rm -f "${dest_file}" || {
+			__error "Failed to remove file: ${dest_file}"
+			return 1
+		}
+	done
+	__success "Files removed successfully"
+	return 0
+}
+function __uninstall_cert() {
+	local _cert_file=$1
+	if [ -z "${_cert_file}" ]; then
+		__error "Certificate file not provided"
+		return 1
+	fi
+	if [ ! -f "${_cert_file}" ]; then
+		__error "Certificate file not found: ${_cert_file}"
+		return 1
+	fi
+	__run_command rm -f /etc/ssl/certs/$(basename "${_cert_file}") || {
+		__error "Failed to remove certificate file: ${_cert_file}"
+		return 1
+	}
+	__run_command c_rehash /etc/ssl/certs/ || {
+		__error "Failed to update certificate hash"
+		return 1
+	}
+	__run_command update-ca-certificates || {
+		__error "Failed to update certificate store"
+		return 1
+	}
+	__success "Certificate removed successfully"
+}
 function __update_desktop_database() {
 	if ! __check_command $(which update-desktop-database); then
 		__warning -e "update-desktop-database utility not found, please update your xdg-utils package and run:\n\nupdate-desktop-database ~/.local/share/applications if you'd like grass to be in your session menu."
@@ -466,34 +545,6 @@ function __display_dependencies() {
 		__info " - ${_dep}"
 	done
 	__info "Please install the dependencies manually using your system's package manager"
-}
-function __install_cert() {
-	local _cert_file=$1
-	if [ -z "${_cert_file}" ]; then
-		__error "Certificate file not provided"
-		return 1
-	fi
-	if [ ! -f "${_cert_file}" ]; then
-		__error "Certificate file not found: ${_cert_file}"
-		return 1
-	fi
-	if ! __check_command $(which update-ca-certificates); then
-		__error "update-ca-certificates command not found"
-		return 1
-	fi
-	__run_command cp "${_cert_file}" /etc/ssl/certs/ || {
-		__error "Failed to copy certificate file to /etc/ssl/certs/"
-		return 1
-	}
-	__run_command c_rehash /etc/ssl/certs/ || {
-		__error "Failed to update certificate hash"
-		return 1
-	}
-	__run_command update-ca-certificates || {
-		__error "Failed to update certificate store"
-		return 1
-	}
-	__success "Certificate installed successfully"
 }
 function __process_node() {
     local _node_name=$1
@@ -567,6 +618,12 @@ function __process_node() {
                 __info "Installing certificate: ${_output_file}..."
                 __install_cert "${_output_file}" || return $?
                 ;;
+			"uninstall_folder")
+				local _source_dir
+				_source_dir="${CACHE_DIR}/$(echo "${_args_json}" | jq -r '.source_folder')"
+				__info "Uninstalling via deb package folder: ${_source_dir}..."
+				__uninstall_files "${_source_dir}" || return $?
+				;;
             "update_desktop_database")
                 __info "Updating desktop database..."
                 __update_desktop_database || return $?
@@ -594,7 +651,12 @@ function __process_manifest() {
         echo "Manifest file not found: ${_manifest_file}" >&2
         return 1
     fi
-    for node_name in $(jq -r '.install | keys[]' "${_manifest_file}"); do
+	local _action=$1
+	if [ -z "${_action}" ]; then
+		__error "Action not provided, please run -h | --help for usage information"
+		return 1
+	fi
+    for node_name in $(jq -r ".${_action} | keys[]" "${_manifest_file}"); do
         _manifest_install_json=$(jq -r --arg node_name "${node_name}" '.install[$node_name]' "${_manifest_file}")
         __process_node "${node_name}" "${_manifest_install_json}" || exit $?
     done
@@ -605,6 +667,9 @@ function __process_manifest() {
 ####################################################################################################
 
 __logo() {
+	if [ ${LOGO} -eq 0 ]; then
+		return 0
+	fi
 	cat <<EOF
                   ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
              ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
@@ -641,11 +706,229 @@ __logo() {
 
         ${C_YELLOW}GetGrass-Installer${C_RESET} ${C_CYAN}Install ${C_GREEN}Grass Desktop Node${C_CYAN} on ${C_BOLD}Any Linux${C_RESET}${C_CYAN}!${C_RESET}
 
-            	${C_CYAN}Author:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_WHITE}${C_BOLD}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
+                ${C_CYAN}Author:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_WHITE}${C_BOLD}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
                 ${C_CYAN}License:${C_RESET} ${C_YELLOW}${C_BOLD}MIT${C_RESET} ${YELLOW}|${C_RESET} ${C_YELLOW}Version:${C_RESET} ${C_GREEN}${C_BOLD}0.1.0${C_RESET}
 
 EOF
 }
+__parse_args() {
+	local _bargs
+	_bargs=()
+	if [ $# -eq 0 ] || [ -z "$1" ]; then
+		ACTION="install"
+		__warn "No action provided, defaulting to ${C_BOLD}install${C_RESET}"
+		return 0
+	else
+		ACTION="$1"
+		if [ "${ACTION}" == "-h" ] || [ "${ACTION}" == "--help" ] || [ "x${ACTION}x" == "xx" ]; then
+			__usage "default"
+			return 0
+		fi
+		shift 1
+	fi
+	case "$ACTION" in
+		"install")
+			while [ $# -gt 0 ]; do
+				case "$1" in
+					-c|--config-file)
+						CONFIG_FILE="$1"
+						;;
+					-i|--install-prefix)
+						INSTALL_PREFIX="$1"
+						;;
+					-e|--cache-dir)
+						CACHE_DIR="$1"
+						;;
+					-u|--user-mode)
+						USER_MODE=1
+						shift 1
+						;;
+					-d|--debug)
+						DEBUG=1
+						shift 1
+						;;
+					-x|--no-logging)
+						LOGGING=0
+						shift 1
+						;;
+					-l|--log-file)
+						shift 1
+						LOG_FILE="$1"
+						;;
+					-h|--help)
+						__usage "install"
+						exit 0
+						;;
+					*)
+						_bargs+=("$1")
+						shift 1
+						;;
+				esac
+				shift
+			done
+			;;
+		"uninstall")
+			while [ $# -gt 0 ]; do
+				case "$1" in
+					-c|--config-file)
+						shift 1
+						CONFIG_FILE="$1"
+						;;
+					-i|--install-prefix)
+						shift 1
+						INSTALL_PREFIX="$1"
+						;;
+					-e|--cache-dir)
+						shift 1
+						CACHE_DIR="$1"
+						;;
+					-u|--user-mode)
+						USER_MODE=1
+						shift 1
+						;;
+					-d|--debug)
+						DEBUG=1
+						shift 1
+						;;
+					-x|--no-logging)
+						LOGGING=0
+						shift 1
+						;;
+					-l|--log-file)
+						shift 1
+						LOG_FILE="$1"
+						;;
+					-h|--help)
+						__usage "uninstall"
+						exit 0
+						;;
+					*)
+						_bargs+=("$1")
+						;;
+				esac
+				shift
+			done
+			;;
+		*)
+			__error "Invalid action: ${ACTION}"
+			__usage "default"
+			return 1
+			;;
+	esac
+	if [ ${#_bargs[@]} -gt 0 ]; then
+		__error "Invalid arguments provided: ${C_BOLD}${_bargs[*]}${C_RESET}, please see -h | --help for usage instructions"
+		return 1
+	fi
+	return 0
+}
+__usage() {
+	local _action
+	if [ $# -eq 0 ]; then
+		_action="default"
+	else
+		_action="$1"
+		shift 1
+	fi
+	cat <<EOF
+${C_GREEN}GetGrass${C_RESET} Desktop Node Installer
+Authors: ${C_BOLD}${C_WHITE}The Grass OGs${C_RESET} ${C_GREEN}<${C_UNDERLINE}${C_BLUE}https://getgrass.io${C_RESET}${C_GREEN}>${C_RESET}
 
-__logo
-__process_manifest "${CONFIG_FILE}"
+EOF
+	# NOTE: When choosing to add new actions or edit be mindful of spatial awareness and tabs :)
+	case "${_action}" in
+		"default")
+			cat <<EOF
+Usage: ${C_BOLD}$0${C_RESET} [action] [options]
+
+${C_BOLD}Actions${C_RESET}:
+	install     Install the Grass Desktop Node
+	uninstall   Uninstall the Grass Desktop Node
+
+${C_BOLD}Options${C_RESET}:
+
+	-h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
+
+For more information, you can run -h or --help for usage instructions on each action.
+EOF
+			;;
+		"install")
+			cat <<EOF
+Usage: ${C_BOLD}$0${C_RESET} install [options]
+
+Help page for the ${C_BOLD}install${C_RESET} action
+
+${C_BOLD}Options${C_RESET}:
+
+    -h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
+    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Configuration file to use
+    -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we install the
+                                     application in this directory rather than the defaults.
+    -e, --cache-dir       ${C_GRAY}<dir>${C_RESET}      Cache directory, if specified then we use this directory
+                                     to store downloaded files.  Its important that you keep
+                                     this directory around as its important for uninstallation.
+    -u, --user-mode       ${C_GRAY}<switch>${C_RESET}   Install in user mode, if specified then we try to install
+                                     the application in the user's home directory.
+    -d, --debug           ${C_GRAY}<switch>${C_RESET}   Enable debug mode, if specified then you get a lot of
+                                     debug information in the terminal.
+    -x, --no-logging      ${C_GRAY}<switch>${C_RESET}   Disable logging, if specified
+    -l, --log-file        ${C_GRAY}<file>${C_RESET}     Log file to use, if -x | --no-logging is specified
+                                     then this option is ignored.
+    -q, --quiet           ${C_GRAY}<switch>${C_RESET}   Quiet mode, if specified we don't print anything
+                                     in the terminal.
+EOF
+			;;
+		"uninstall")
+			cat <<EOF
+Usage: ${C_BOLD}$0${C_RESET} uninstall [options]
+
+Help page for the ${C_BOLD}uninstall${C_RESET} action
+
+${C_BOLD}Options${C_RESET}:
+
+    -h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
+    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Configuration file to use
+    -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we install the
+                                     application in this directory rather than the defaults.
+    -e, --cache-dir       ${C_GRAY}<dir>${C_RESET}      Cache directory, if specified then we use this directory
+                                     to store downloaded files.  Its important that you keep
+                                     this directory around as its important for uninstallation.
+    -u, --user-mode       ${C_GRAY}<switch>${C_RESET}   Install in user mode, if specified then we try to install
+                                     the application in the user's home directory.
+    -d, --debug           ${C_GRAY}<switch>${C_RESET}   Enable debug mode, if specified then you get a lot of
+                                     debug information in the terminal.
+    -x, --no-logging      ${C_GRAY}<switch>${C_RESET}   Disable logging, if specified then we don't print
+                                     anything in the terminal.
+    -l, --log-file        ${C_GRAY}<file>${C_RESET}     Log file to use, if -x | --no-logging is specified
+                                     then this option is ignored.
+    -q, --quiet           ${C_GRAY}<switch>${C_RESET}   Quiet mode, if specified we don't print anything
+                                     in the terminal.
+EOF
+			;;
+		*)
+			__error "Invalid usage action: ${_action}"
+			return 1
+			;;
+	esac
+	QUIET=1
+	LOGGING=0
+	return 0
+}
+__main() {
+	local _args
+	_args=($*)
+	__parse_args ${_args[*]} || exit $?
+	case "${ACTION}" in
+		"install")
+			__logo
+			__process_manifest "${CONFIG_FILE}" "${ACTION}" || exit $?
+			;;
+		"uninstall")
+			__logo
+			__process_manifest "${CONFIG_FILE}" "${ACTION}" || exit $?
+			;;
+		*)
+			exit $? # Invalid action
+			;;
+	esac
+}
+__main $@
