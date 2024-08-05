@@ -641,7 +641,7 @@ __logo() {
 
         ${C_YELLOW}GetGrass-Installer${C_RESET} ${C_CYAN}Install ${C_GREEN}Grass Desktop Node${C_CYAN} on ${C_BOLD}Any Linux${C_RESET}${C_CYAN}!${C_RESET}
 
-            	${C_CYAN}Author:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_WHITE}${C_BOLD}https://getgrass.org${C_RESET}${C_CYAN}>${C_RESET}
+            	${C_CYAN}Author:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_WHITE}${C_BOLD}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
                 ${C_CYAN}License:${C_RESET} ${C_YELLOW}${C_BOLD}MIT${C_RESET} ${YELLOW}|${C_RESET} ${C_YELLOW}Version:${C_RESET} ${C_GREEN}${C_BOLD}0.1.0${C_RESET}
 
 EOF

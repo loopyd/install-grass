@@ -6,45 +6,45 @@
                     "name": "download",
                     "args": {
                         "type": "gdrive",
-                        "filename": "grass_4.26.3_amd64.deb",
-                        "file_id": "1qVPx2o1kLg3nBsMLae0jjI7huKEh26Nc"
+                        "filename": "grass_4.26.4_amd64.deb",
+                        "file_id": "1xXGBmQHMcAypew191iX3nMrpEhDmyMZM"
                     }
                 },
                 {
                     "name": "check",
                     "args": {
                         "type": "md5",
-                        "filename": "grass_4.26.3_amd64.deb",
-                        "value": "9a7bf532e24a7fc55537d879312f45d5"
+                        "filename": "grass_4.26.4_amd64.deb",
+                        "value": "a751cb1253fa5970e8150579aae24bf5"
                     }
                 },
                 {
                     "name": "check",
                     "args": {
                         "type": "sha256",
-                        "filename": "grass_4.26.3_amd64.deb",
-                        "value": "66dbabbe962b4cf56b8866c5a002328d25bd652525d872fd1d7407ca8cdd7cb7"
+                        "filename": "grass_4.26.4_amd64.deb",
+                        "value": "db2a455dc13ed6ef9fc97ea15fbb95bb5753cdba01f2ffe5a9487bd8212d6166"
                     }
                 },
                 {
                     "name": "check",
                     "args": {
                         "type": "crc32",
-                        "filename": "grass_4.26.3_amd64.deb",
-                        "value": "0b8d54d5"
+                        "filename": "grass_4.26.4_amd64.deb",
+                        "value": "9b2495e9"
                     }
                 },
                 {
                     "name": "extract_deb",
                     "args": {
-                        "filename": "grass_4.26.3_amd64.deb",
-                        "destination_folder": "grass_4.26.3_amd64"
+                        "filename": "grass_4.26.4_amd64.deb",
+                        "destination_folder": "grass_4.26.4_amd64"
                     }
                 },
                 {
                     "name": "install_folder",
                     "args": {
-                        "source_folder": "grass_4.26.3_amd64"
+                        "source_folder": "grass_4.26.4_amd64"
                     }
                 },
                 {
@@ -54,7 +54,7 @@
                 {
                     "name": "display_dependencies",
                     "args": {
-                        "source_folder": "grass_4.26.3_amd64"
+                        "source_folder": "grass_4.26.4_amd64"
                     }
                 }
             ]
