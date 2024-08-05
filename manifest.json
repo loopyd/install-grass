@@ -1,6 +1,6 @@
 {
     "install": {
-        "Grass Desktop Node": {
+        "GrassDesktopNode": {
             "actions": [
                 {
                     "name": "download",
@@ -59,7 +59,7 @@
                 }
             ]
         },
-        "RSA Domain Validation SecureServer Intermediate CA": {
+        "RSADomainValidationSecureServerIntermediateCA": {
             "actions": [
                 {
                     "name": "download",
@@ -103,7 +103,26 @@
         }
     },
     "uninstall" : {
-        
+        "GrassDesktopNode": {
+            "actions": [
+                {
+                    "name": "uninstall_folder",
+                    "args": {
+                        "source_folder": "grass_4.26.4_amd64"
+                    }
+                }
+            ]
+        },
+        "RSADomainValidationSecureServerIntermediateCA": {
+            "actions": [
+                {
+                    "name": "remove_cert",
+                    "args": {
+                        "filename": "SectigoRSADomainValidationSecureServerCA.crt"
+                    }
+                }
+            ]
+        }
     },
     "dependencies": {
         "ubuntu": [
