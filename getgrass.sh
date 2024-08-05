@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 
-# getgrass: Install Grass on Any Linux!
-#
+####################################################################################################
+## getgrass: Install Grass on Any Linux!  v0.1.1
+## Authors: The Grass OGs <getgrass.io>
+## -------------------------------------------------------------------------------------------------
+##
+## This software is licensed under the MIT License.  You can modify and distribute it as you see fit
+## in accordance with the Software License.  Please see the LICENSE file provided with this software
+## for more information.
+##
+####################################################################################################
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "This installer must be run as root as it will make changes to file ownership and install files as necessary on your system." >&2
@@ -29,6 +37,7 @@ QUIET=${QUIET:-0}
 LOG_FILE=${LOG_FILE:-"/var/log/grass-install.log"}
 LOGO=${LOGO:-1}
 DRY_RUN=${DRY_RUN:-0}
+APP_VERSION="0.1.1"
 
 # Colors
 C_RED=$(tput setaf 1)
@@ -115,13 +124,16 @@ function __debug() {
 function _exit_trap() {
 	local _exit_code=$?
 	if [ ${_exit_code} -eq 0 ]; then
-		__success "Installation completed successfully"
+		__success "🌟 *** Program completed successfully"
 	else
-		__error "Installation failed with exit(${_exit_code}).  Please use the log located at: ${LOG_FILE} when submitting a bug report."
+		__error "❌ *** Program exited with status(${_exit_code})."
+		if [ ${LOGGING} -eq 1 ]; then
+			__error "❌ *** Log file stored at: ${LOG_FILE}"
+		fi
 	fi
 	return ${_exit_code}
 }
-trap _exit_trap EXIT ERR SIGINT SIGTERM
+trap _exit_trap EXIT ERR
 
 ####################################################################################################
 # DeLib Core library
@@ -630,17 +642,15 @@ function __update_desktop_database() {
 	if ! __check_command update-desktop-database; then
 		__warn "update-desktop-database utility not found, please update your xdg-utils package and run:\n\nupdate-desktop-database ~/.local/share/applications if you'd like grass to be in your session menu."
 		return 0
-	else
-		__info "Updating ${USER_NAME}'s X desktop database..."
-		if [ ${DRY_RUN} -eq 1 ]; then
-			__info "DRY RUN: Would have updated ${USER_NAME}'s Xdesktop database"
-			return 0
-		fi
-		__run_command "$(which su) -s $(which bash) $USER_NAME -c \"update-desktop-database /home/${USER_NAME}/.local/share/applications\"" || {
-			__error "Failed to update ${USER_NAME}'s Xdesktop database"
-			return 1
-		}
 	fi
+	if [ ${DRY_RUN} -eq 1 ]; then
+		__info "DRY RUN: Would have updated ${USER_NAME}'s Xdesktop database"
+		return 0
+	fi
+	__run_command "$(which su) -s $(which bash) $USER_NAME -c \"update-desktop-database /home/${USER_NAME}/.local/share/applications\"" || {
+		__error "Failed to update ${USER_NAME}'s Xdesktop database"
+		return 1
+	}
 	__success "Desktop database updated successfully"
 	return 0
 }
@@ -750,7 +760,7 @@ function __process_node() {
 				__uninstall_cert "${_output_file}" || return $?
 				;;
             "update_desktop_database")
-                __info "Updating desktop database..."
+                __info "Updating ${USER_NAME}'s X desktop database..."
                 __update_desktop_database || return $?
                 ;;
             "display_dependencies")
@@ -845,10 +855,12 @@ __logo() {
              ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
                  ${C_GREEN}░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${C_RESET}
 
-        ${C_YELLOW}GetGrass-Installer${C_RESET} ${C_CYAN}Install ${C_GREEN}Grass Desktop Node${C_CYAN} on ${C_BOLD}Any Linux${C_RESET}${C_CYAN}!${C_RESET}
+${C_YELLOW}GetGrass${C_RESET} ${C_CYAN}Install ${C_GREEN}Grass Desktop Node${C_CYAN} on ${C_BOLD}Any Linux${C_RESET}${C_CYAN}!${C_RESET}
+${C_GREEN}Authors:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_BLUE}${C_UNDERLINE}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
+${C_GREEN}License:${C_RESET} ${C_YELLOW}${C_BOLD}MIT Software License${C_RESET} ${C_GREEN}|${C_RESET} ${C_MAGENTA}${C_BOLD}v${APP_VERSION}${C_RESET}
 
-                ${C_CYAN}Author:${C_RESET} ${C_WHITE}${C_BOLD}The Grass OGs${C_RESET} ${C_CYAN}<${C_RESET}${C_WHITE}${C_BOLD}https://getgrass.io${C_RESET}${C_CYAN}>${C_RESET}
-                ${C_CYAN}License:${C_RESET} ${C_YELLOW}${C_BOLD}MIT${C_RESET} ${YELLOW}|${C_RESET} ${C_YELLOW}Version:${C_RESET} ${C_GREEN}${C_BOLD}0.1.0${C_RESET}
+This program is free software: You can redistribute it and/or modify it under the terms of
+the ${C_BOLD}MIT License${C_RESET}.  Please see the ${C_BOLD}LICENSE${C_RESET} file included with this software for more details.
 
 EOF
 }
@@ -919,8 +931,16 @@ __parse_args() {
 						LOGGING=0
 						shift 1
 						;;
+					-z|--no-logo)
+						LOGO=0
+						shift 1
+						;;
 					-D|--dry-run)
 						DRY_RUN=1
+						shift 1
+						;;
+					-q|--quiet)
+						QUIET=1
 						shift 1
 						;;
 					-h|--help)
@@ -973,10 +993,6 @@ __parse_args() {
 						LOG_FILE="$2"
 						shift 2
 						;;
-					-u|--user-mode)
-						USER_MODE=1
-						shift 1
-						;;
 					-d|--debug)
 						DEBUG=1
 						shift 1
@@ -987,6 +1003,14 @@ __parse_args() {
 						;;
 					-D|--dry-run)
 						DRY_RUN=1
+						shift 1
+						;;
+					-q|--quiet)
+						QUIET=1
+						shift 1
+						;;
+					-z|--no-logo)
+						LOGO=0
 						shift 1
 						;;
 					-h|--help)
@@ -1020,8 +1044,11 @@ __usage() {
 		shift 1
 	fi
 	cat <<EOF
-${C_GREEN}GetGrass${C_RESET} Desktop Node Installer
-Authors: ${C_BOLD}${C_WHITE}The Grass OGs${C_RESET} ${C_GREEN}<${C_UNDERLINE}${C_BLUE}https://getgrass.io${C_RESET}${C_GREEN}>${C_RESET}
+${C_BOLD}${C_GREEN}GetGrass${C_RESET} ${C_CYAN}Desktop Node Installer${C_RESET} ${C_MAGENTA}v${APP_VERSION}${C_RESET}
+${C_BOLD}${C_YELLOW}Authors:${C_RESET} ${C_WHITE}The Grass OGs${C_RESET} ${C_GREEN}<${C_UNDERLINE}${C_BLUE}https://getgrass.io${C_RESET}${C_GREEN}>${C_RESET}
+
+This program is ${C_GREEN}free software${C_RESET}: you can redistribute and/or modify under the terms of the ${C_BOLD}${C_GREEN}MIT License${C_RESET}.
+Please review the ${C_BOLD}LICENSE${C_RESET} file that comes with this software for more information.
 
 EOF
 	# NOTE: When choosing to add new actions or edit be mindful of spatial awareness and tabs :)
@@ -1050,14 +1077,14 @@ Help page for the ${C_BOLD}install${C_RESET} action
 ${C_BOLD}Options${C_RESET}:
 
     -h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
-    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Configuration file to use
+    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Manifest configuration file to use
     -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we install the
                                      application in this directory rather than the defaults.
     -e, --cache-dir       ${C_GRAY}<dir>${C_RESET}      Cache directory, if specified then we use this directory
                                      to store downloaded files.  Its important that you keep
                                      this directory around as its important for uninstallation.
     -u, --user-mode       ${C_GRAY}<switch>${C_RESET}   Install in user mode, if specified then we try to install
-                                     the application in the user's home directory.
+                                     the application owned by the user.
     -d, --debug           ${C_GRAY}<switch>${C_RESET}   Enable debug mode, if specified then you get a lot of
                                      debug information in the terminal.
     -x, --no-logging      ${C_GRAY}<switch>${C_RESET}   Disable logging, if specified
@@ -1065,9 +1092,10 @@ ${C_BOLD}Options${C_RESET}:
                                      then this option is ignored.
     -q, --quiet           ${C_GRAY}<switch>${C_RESET}   Quiet mode, if specified we don't print anything
                                      in the terminal.
-    -D, --dry-run        ${C_GRAY}<switch>${C_RESET}   Dry run mode, if specified we don't install anything
-                                      but we print the steps that would be taken.  Downloads still occur into
-                                      the cache directory.
+    -z, --no-logo         ${C_GRAY}<switch>${C_RESET}   Disable the logo, if specified we don't print the logo
+    -D, --dry-run         ${C_GRAY}<switch>${C_RESET}   Dry run mode, if specified we don't install anything
+                                     but we print the steps that would be taken.  Downloads
+                                     still occur into the cache directory.
 EOF
 			;;
 		"uninstall")
@@ -1079,14 +1107,12 @@ Help page for the ${C_BOLD}uninstall${C_RESET} action
 ${C_BOLD}Options${C_RESET}:
 
     -h, --help            ${C_GRAY}<switch>${C_RESET}   Display this help message, and exit
-    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Configuration file to use
-    -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we install the
+    -c, --config-file     ${C_GRAY}<file>${C_RESET}     Manfiest configuration file to use
+    -i, --install-prefix  ${C_GRAY}<dir>${C_RESET}      Installation prefix, if specified then we look for the
                                      application in this directory rather than the defaults.
     -e, --cache-dir       ${C_GRAY}<dir>${C_RESET}      Cache directory, if specified then we use this directory
                                      to store downloaded files.  Its important that you keep
                                      this directory around as its important for uninstallation.
-    -u, --user-mode       ${C_GRAY}<switch>${C_RESET}   Install in user mode, if specified then we try to install
-                                     the application in the user's home directory.
     -d, --debug           ${C_GRAY}<switch>${C_RESET}   Enable debug mode, if specified then you get a lot of
                                      debug information in the terminal.
     -x, --no-logging      ${C_GRAY}<switch>${C_RESET}   Disable logging, if specified then we don't print
@@ -1095,9 +1121,10 @@ ${C_BOLD}Options${C_RESET}:
                                      then this option is ignored.
     -q, --quiet           ${C_GRAY}<switch>${C_RESET}   Quiet mode, if specified we don't print anything
                                      in the terminal.
-    -D, --dry-run        ${C_GRAY}<switch>${C_RESET}   Dry run mode, if specified we don't uninstall anything
-                                    but we print the steps that would be taken.  Downloads still occur into
-                                    the cache directory.
+    -z, --no-logo         ${C_GRAY}<switch>${C_RESET}   Disable the logo, if specified we don't print the logo
+    -D, --dry-run         ${C_GRAY}<switch>${C_RESET}   Dry run mode, if specified we don't uninstall anything
+                                     but we print the steps that would be taken.  Downloads
+                                     still occur into the cache directory.
 EOF
 			;;
 		*)
@@ -1112,19 +1139,23 @@ EOF
 __main() {
 	local _args
 	_args=($*)
-	__parse_args ${_args[*]} || exit $?
+	__parse_args ${_args[*]} || return $?
 	case "${ACTION}" in
 		"install")
 			__logo
-			__process_manifest "${CONFIG_FILE}" "${ACTION}" || exit $?
+			__success "🌱 *** Program initialized, lets get grass!"
+			__process_manifest "${CONFIG_FILE}" "${ACTION}" || return $?
 			;;
 		"uninstall")
 			__logo
-			__process_manifest "${CONFIG_FILE}" "${ACTION}" || exit $?
+			__success "🦎 *** Program initialized, lets cut the grass!"
+			__process_manifest "${CONFIG_FILE}" "${ACTION}" || return $?
 			;;
 		*)
-			exit $? # Invalid action
+			__error "Invalid action: ${ACTION}"
+			__usage "default"
+			return 1
 			;;
 	esac
 }
-__main $@
+__main $@ || exit $?
