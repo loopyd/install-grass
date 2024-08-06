@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ####################################################################################################
-## getgrass: Install Grass on Any Linux!  v0.1.1
+## getgrass: Install Grass on Any Linux!  v0.1.2
 ## Authors: The Grass OGs <getgrass.io>
 ## -------------------------------------------------------------------------------------------------
 ##
@@ -37,7 +37,7 @@ QUIET=${QUIET:-0}
 LOG_FILE=${LOG_FILE:-"/var/log/grass-install.log"}
 LOGO=${LOGO:-1}
 DRY_RUN=${DRY_RUN:-0}
-APP_VERSION="0.1.1"
+APP_VERSION="0.1.2"
 
 # Colors
 C_RED=$(tput setaf 1)
